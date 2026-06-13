@@ -384,41 +384,51 @@ export default function App() {
   });
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      minHeight: "100vh", background: "#080c14", fontFamily: "'Courier New',monospace",
-      userSelect: "none", padding: 16, gap: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center",
+      height: "100dvh", width: "100%", background: "#080c14", fontFamily: "'Courier New',monospace",
+      userSelect: "none", overflow: "hidden",
+      paddingTop: "calc(env(safe-area-inset-top) + 10px)",
+      paddingBottom: "calc(env(safe-area-inset-bottom) + 10px)",
+      paddingLeft: "calc(env(safe-area-inset-left) + 12px)",
+      paddingRight: "calc(env(safe-area-inset-right) + 12px)" }}>
 
-      {/* Title */}
-      <div style={{ marginBottom: 16, textAlign: "center" }}>
-        <div style={{ fontSize: 10, letterSpacing: 6, color: "#3a5a7a", textTransform: "uppercase", marginBottom: 3 }}>
-          {mode === "daily" ? `daily maze #${dailyNumber()}` : "trace the path"}
+      {/* Header */}
+      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+        {/* Title */}
+        <div style={{ marginBottom: 10, textAlign: "center" }}>
+          <div style={{ fontSize: 10, letterSpacing: 6, color: "#3a5a7a", textTransform: "uppercase", marginBottom: 3 }}>
+            {mode === "daily" ? `daily maze #${dailyNumber()}` : "trace the path"}
+          </div>
+          <div style={{ fontSize: 24, fontWeight: "bold", color: "#e0f0ff", letterSpacing: 2 }}>MAZE</div>
         </div>
-        <div style={{ fontSize: 24, fontWeight: "bold", color: "#e0f0ff", letterSpacing: 2 }}>MAZE</div>
+
+        {/* Mode selector */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <button style={btnStyle(mode === "random", "#3a7aaa")} onClick={() => changeMode("random")}>Random</button>
+          <button style={btnStyle(mode === "daily", "#00ffb4")} onClick={() => changeMode("daily")}>Daily #{dailyNumber()}</button>
+        </div>
+
+        {/* Difficulty selector */}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+          {Object.entries(LEVELS).map(([key, { label }]) => (
+            <button key={key} style={btnStyle(difficulty === key, DIFF_COLORS[key])}
+              onClick={() => changeDifficulty(key)}>{label}</button>
+          ))}
+        </div>
       </div>
 
-      {/* Mode selector */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-        <button style={btnStyle(mode === "random", "#3a7aaa")} onClick={() => changeMode("random")}>Random</button>
-        <button style={btnStyle(mode === "daily", "#00ffb4")} onClick={() => changeMode("daily")}>Daily #{dailyNumber()}</button>
-      </div>
-
-      {/* Difficulty selector */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap", justifyContent: "center" }}>
-        {Object.entries(LEVELS).map(([key, { label }]) => (
-          <button key={key} style={btnStyle(difficulty === key, DIFF_COLORS[key])}
-            onClick={() => changeDifficulty(key)}>{label}</button>
-        ))}
-      </div>
-
-      {/* Maze SVG */}
-      <div style={{ width: "100%", maxWidth: svgW, borderRadius: 10, background: "#0d1520", overflow: "hidden",
+      {/* Maze area — flexes to fill the space between header and footer */}
+      <div style={{ flex: 1, minHeight: 0, width: "100%", display: "flex",
+        alignItems: "center", justifyContent: "center", padding: "12px 0" }}>
+      <div style={{ aspectRatio: `${svgW} / ${svgH}`, maxWidth: "100%", maxHeight: "100%",
+        borderRadius: 10, background: "#0d1520", overflow: "hidden",
         transition: "border-color 0.2s,box-shadow 0.2s",
         border: `1px solid ${stuck ? "rgba(255,80,80,0.5)" : "#1a2d45"}`,
         boxShadow: stuck
           ? "0 0 30px rgba(255,60,60,0.2),0 16px 48px rgba(0,0,0,0.7)"
           : "0 0 32px rgba(0,120,255,0.07),0 16px 48px rgba(0,0,0,0.7)" }}>
         <svg ref={svgRef} viewBox={`0 0 ${svgW} ${svgH}`}
-          style={{ display: "block", width: "100%", height: "auto", touchAction: "none", cursor: "crosshair" }}
+          style={{ display: "block", width: "100%", height: "100%", touchAction: "none", cursor: "crosshair" }}
           onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
           onTouchStart={(e) => { e.preventDefault(); handleStart(e.touches[0].clientX, e.touches[0].clientY); }}
           onTouchMove={(e) => { e.preventDefault(); handleMove(e.touches[0].clientX, e.touches[0].clientY); }}
@@ -492,9 +502,13 @@ export default function App() {
           <text x={endPt.x} y={endPt.y + 4} textAnchor="middle" fontSize={Math.max(9, CELL / 6)} fill={won ? "#00ffb4" : "#ffcc00"}>E</text>
         </svg>
       </div>
+      </div>
+
+      {/* Footer — fixed-height block below the flexible maze */}
+      <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
 
       {/* Status */}
-      <div style={{ marginTop: 12, fontSize: 10, color: stuck ? "#ff6060" : "#2a4a6a",
+      <div style={{ fontSize: 10, color: stuck ? "#ff6060" : "#2a4a6a",
         letterSpacing: 2, textAlign: "center", transition: "color 0.2s", minHeight: 18 }}>
         {stuck ? "DEAD END — BACKTRACK" :
           path.length === 0 ? "DRAG FROM  S  TO REACH  E  (OR USE ARROWS / WASD)" :
@@ -503,14 +517,14 @@ export default function App() {
       </div>
 
       {/* Stats */}
-      <div style={{ marginTop: 6, fontSize: 10, color: "#3a5a7a", letterSpacing: 2, textAlign: "center", minHeight: 16 }}>
+      <div style={{ marginTop: 4, fontSize: 10, color: "#3a5a7a", letterSpacing: 2, textAlign: "center", minHeight: 16 }}>
         TIME {fmtTime(elapsedMs)} · STEPS {steps}
         {bestEntry && <> · BEST {fmtTime(bestEntry.ms)}</>}
         {hintsUsed > 0 && <> · HINTS {hintsUsed}</>}
       </div>
 
       {/* Controls */}
-      <div style={{ marginTop: 16, display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
+      <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
         {mode === "random" && (
           <button style={btnStyle(false, "#3a7aaa")} onClick={reset}>
             <Icon name="refresh" />New Maze
@@ -529,6 +543,7 @@ export default function App() {
           title="On: the trace stays when you lift your finger. Off: lifting clears it — solve in one stroke.">
           <Icon name="save" />{saveTrace ? "Save Trace: On" : "Save Trace: Off"}
         </button>
+      </div>
       </div>
 
       {/* Win overlay — backdrop click dismisses so the maze can be admired */}

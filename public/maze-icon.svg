@@ -1,0 +1,60 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0e1726"/>
+      <stop offset="1" stop-color="#060a12"/>
+    </linearGradient>
+    <radialGradient id="vignette" cx="0.5" cy="0.42" r="0.7">
+      <stop offset="0" stop-color="#16335a" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#060a12" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="path" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#00ffd0"/>
+      <stop offset="0.55" stop-color="#00b4ff"/>
+      <stop offset="1" stop-color="#7b61ff"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Full-bleed background (OS applies its own corner mask) -->
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <rect width="512" height="512" fill="url(#vignette)"/>
+
+  <!-- Maze grid (faint), 4x4 over region 96..416 -->
+  <g stroke="#14304f" stroke-width="6" stroke-linecap="round">
+    <line x1="96"  y1="176" x2="416" y2="176"/>
+    <line x1="96"  y1="256" x2="416" y2="256"/>
+    <line x1="96"  y1="336" x2="416" y2="336"/>
+    <line x1="176" y1="96"  x2="176" y2="416"/>
+    <line x1="256" y1="96"  x2="256" y2="416"/>
+    <line x1="336" y1="96"  x2="336" y2="416"/>
+  </g>
+  <!-- A few bolder maze walls -->
+  <g stroke="#1f426b" stroke-width="10" stroke-linecap="round">
+    <line x1="176" y1="96"  x2="176" y2="256"/>
+    <line x1="336" y1="176" x2="336" y2="416"/>
+    <line x1="256" y1="256" x2="416" y2="256"/>
+    <line x1="96"  y1="336" x2="256" y2="336"/>
+  </g>
+
+  <!-- Maze border -->
+  <rect x="96" y="96" width="320" height="320" rx="14" fill="none" stroke="#2a4a6a" stroke-width="10"/>
+
+  <!-- Glowing solution path: top-left (S) to bottom-right (E) -->
+  <polyline points="136,136 216,136 216,296 296,296 296,216 376,216 376,376"
+    fill="none" stroke="url(#path)" stroke-width="26" stroke-linecap="round"
+    stroke-linejoin="round" opacity="0.18" filter="url(#glow)"/>
+  <polyline points="136,136 216,136 216,296 296,296 296,216 376,216 376,376"
+    fill="none" stroke="url(#path)" stroke-width="18" stroke-linecap="round"
+    stroke-linejoin="round" filter="url(#glow)"/>
+
+  <!-- Start node (S) -->
+  <circle cx="136" cy="136" r="30" fill="#0a2417" stroke="#00ff80" stroke-width="8"/>
+  <circle cx="136" cy="136" r="11" fill="#00ff80"/>
+  <!-- End node (E) -->
+  <circle cx="376" cy="376" r="30" fill="#2a2208" stroke="#ffcc00" stroke-width="8" filter="url(#glow)"/>
+  <circle cx="376" cy="376" r="11" fill="#ffcc00"/>
+</svg>

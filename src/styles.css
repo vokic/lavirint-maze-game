@@ -1,5 +1,18 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: #080c14; overflow-x: hidden; }
+html, body, #root { height: 100%; }
+body {
+  background: #080c14;
+  overflow: hidden;            /* app-like: no page scroll */
+  overscroll-behavior: none;   /* kill pull-to-refresh / rubber-banding */
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+/* Material Symbols sizing/weight */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+}
 @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 @keyframes stuckPulse { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
