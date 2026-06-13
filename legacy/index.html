@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>MAZE</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #080c14; overflow: hidden; }
+    @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    @keyframes stuckPulse { 0%,100% { opacity: 0.3; } 50% { opacity: 1; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useRef, useCallback, useEffect } = React;
+    const PAD = 20, MAX_ROUTE = 6;
+
+    const LEVELS = {
+      easy:     { label: "Easy",     rows: 6,  cols: 6,  cell: 72 },
+      medium:   { label: "Medium",   rows: 10, cols: 10, cell: 50 },
+      advanced: { label: "Advanced", rows: 15, cols: 15, cell: 36 },
+      crazy:    { label: "Crazy",    rows: 28, cols: 28, cell: 20 },
+    };
+    const DIFF_COLORS = { easy: "#00b4ff", medium: "#ffaa00", advanced: "#ff4488", crazy: "#cc44ff" };
+
+    function generateMaze(rows, cols) {
+      const cells = Array.from({ length: rows }, () =>
+        Array.from({ length: cols }, () => ({ N: false, S: false, E: false, W: false }))
+      );
+      const visited = Array.from({ length: rows }, () => Array(cols).fill(false));
+      function carve(r, c) {
+        visited[r][c] = true;
+        const dirs = [{ dr:-1,dc:0,d:"N",od:"S" },{ dr:1,dc:0,d:"S",od:"N" },{ dr:0,dc:1,d:"E",od:"W" },{ dr:0,dc:-1,d:"W",od:"E" }];
+        for (let i = dirs.length - 1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [dirs[i],dirs[j]]=[dirs[j],dirs[i]]; }
+        for (const { dr, dc, d, od } of dirs) {
+          const nr = r+dr, nc = c+dc;
+          if (nr>=0&&nr<rows&&nc>=0&&nc<cols&&!visited[nr][nc]) { cells[r][c][d]=true; cells[nr][nc][od]=true; carve(nr,nc); }
+        }
+      }
+      carve(0, 0);
+      return cells;
+    }
+
+    function bfsRoute(maze, r1, c1, r2, c2, visitedSet, ROWS, COLS) {
+      if (r1===r2&&c1===c2) return [];
+      const DIRS = [[-1,0,'N'],[1,0,'S'],[0,1,'E'],[0,-1,'W']];
+      const queue = [[r1,c1,[]]];
+      const seen = new Set([`${r1},${c1}`]);
+      while (queue.length) {
+        const [r,c,path] = queue.shift();
+        if (path.length >= MAX_ROUTE) continue;
+        for (const [dr,dc,d] of DIRS) {
+          const nr=r+dr, nc=c+dc, key=`${nr},${nc}`;
+          if (nr<0||nr>=ROWS||nc<0||nc>=COLS||seen.has(key)||visitedSet.has(key)||!maze[r][c][d]) continue;
+          const np = [...path, {r:nr,c:nc}];
+          if (nr===r2&&nc===c2) return np;
+          seen.add(key);
+          queue.push([nr,nc,np]);
+        }
+      }
+      return null;
+    }
+
+    function isStuck(maze, r, c, visitedSet, ROWS, COLS) {
+      const DIRS = [[-1,0,'N'],[1,0,'S'],[0,1,'E'],[0,-1,'W']];
+      for (const [dr,dc,d] of DIRS) {
+        const nr=r+dr, nc=c+dc;
+        if (nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!visitedSet.has(`${nr},${nc}`)&&maze[r][c][d]) return false;
+      }
+      return true;
+    }
+
+    function App() {
+      const [difficulty, setDifficulty] = useState('easy');
+      const { rows: ROWS, cols: COLS, cell: CELL } = LEVELS[difficulty];
+
+      const [maze, setMaze] = useState(() => generateMaze(ROWS, COLS));
+      const [path, setPath] = useState([]);
+      const [dragging, setDragging] = useState(false);
+      const [won, setWon] = useState(false);
+      const [stuck, setStuck] = useState(false);
+      const svgRef = useRef(null);
+      const pathRef = useRef([]);
+      const stuckRef = useRef(false);
+
+      // Reset when difficulty changes
+      const changeDifficulty = (d) => {
+        setDifficulty(d);
+        const { rows, cols } = LEVELS[d];
+        setMaze(generateMaze(rows, cols));
+        pathRef.current = []; setPath([]); setWon(false); setDragging(false);
+        setStuck(false); stuckRef.current = false;
+      };
+
+      const getCell = useCallback((cx, cy) => {
+        if (!svgRef.current) return null;
+        const rect = svgRef.current.getBoundingClientRect();
+        const x = cx - rect.left - PAD, y = cy - rect.top - PAD;
+        const c = Math.floor(x/CELL), r = Math.floor(y/CELL);
+        return (r>=0&&r<ROWS&&c>=0&&c<COLS) ? {r,c} : null;
+      }, [ROWS, COLS, CELL]);
+
+      const handleStart = useCallback((cx, cy) => {
+        const cell = getCell(cx, cy);
+        if (!cell) return;
+        const vIdx = pathRef.current.findIndex(p => p.r===cell.r&&p.c===cell.c);
+        if (vIdx >= 0) {
+          const next = pathRef.current.slice(0, vIdx+1);
+          pathRef.current = next; setPath([...next]);
+          setDragging(true); setWon(false); setStuck(false); stuckRef.current = false;
+          return;
+        }
+        if (cell.r===0&&cell.c===0) {
+          const init = [{r:0,c:0}];
+          pathRef.current = init; setPath(init);
+          setDragging(true); setWon(false); setStuck(false); stuckRef.current = false;
+        }
+      }, [getCell]);
+
+      const handleMove = useCallback((cx, cy) => {
+        if (!dragging) return;
+        const cell = getCell(cx, cy);
+        if (!cell) return;
+        const prev = pathRef.current;
+        if (!prev.length) return;
+        const last = prev[prev.length-1];
+        if (last.r===cell.r&&last.c===cell.c) return;
+
+        const vIdx = prev.findIndex(p => p.r===cell.r&&p.c===cell.c);
+        if (vIdx >= 0) {
+          const next = prev.slice(0, vIdx+1);
+          pathRef.current = next; setPath([...next]);
+          setStuck(false); stuckRef.current = false;
+          return;
+        }
+
+        const visitedSet = new Set(prev.map(p => `${p.r},${p.c}`));
+        const route = bfsRoute(maze, last.r, last.c, cell.r, cell.c, visitedSet, ROWS, COLS);
+
+        if (route && route.length > 0) {
+          const next = [...prev, ...route];
+          pathRef.current = next; setPath([...next]);
+          setStuck(false); stuckRef.current = false;
+          const fin = route[route.length-1];
+          if (fin.r===ROWS-1&&fin.c===COLS-1) { setWon(true); setDragging(false); }
+        } else {
+          if (isStuck(maze, last.r, last.c, visitedSet, ROWS, COLS) && !stuckRef.current) {
+            stuckRef.current = true;
+            setStuck(true);
+            if (navigator.vibrate) navigator.vibrate([60,40,60]);
+            setTimeout(() => { setStuck(false); stuckRef.current = false; }, 700);
+          }
+        }
+      }, [dragging, getCell, maze, ROWS, COLS]);
+
+      const handleEnd = useCallback(() => { setDragging(false); }, []);
+
+      useEffect(() => {
+        if (!dragging) return;
+        const onMove = e => handleMove(e.clientX, e.clientY);
+        const onUp = () => handleEnd();
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+        return () => {
+          window.removeEventListener('mousemove', onMove);
+          window.removeEventListener('mouseup', onUp);
+        };
+      }, [dragging, handleMove, handleEnd]);
+
+      const reset = () => {
+        setMaze(generateMaze(ROWS, COLS));
+        pathRef.current = []; setPath([]); setWon(false); setDragging(false);
+        setStuck(false); stuckRef.current = false;
+      };
+      const clearPath = () => {
+        pathRef.current = []; setPath([]); setWon(false); setStuck(false); stuckRef.current = false;
+      };
+
+      // Build walls
+      const wallSet = new Set(), walls = [];
+      for (let r=0; r<ROWS; r++) for (let c=0; c<COLS; c++) {
+        const x=PAD+c*CELL, y=PAD+r*CELL, cell=maze[r][c];
+        const add=(key,x1,y1,x2,y2)=>{ if(!wallSet.has(key)){wallSet.add(key);walls.push({key,x1,y1,x2,y2});} };
+        if(!cell.N) add(`N${r}${c}`,x,y,x+CELL,y);
+        if(!cell.S) add(`S${r}${c}`,x,y+CELL,x+CELL,y+CELL);
+        if(!cell.W) add(`W${r}${c}`,x,y,x,y+CELL);
+        if(!cell.E) add(`E${r}${c}`,x+CELL,y,x+CELL,y+CELL);
+      }
+
+      const svgW = COLS*CELL + PAD*2;
+      const svgH = ROWS*CELL + PAD*2;
+      const startPt = { x: PAD + CELL/2, y: PAD + CELL/2 };
+      const endPt = { x: PAD + (COLS-1)*CELL + CELL/2, y: PAD + (ROWS-1)*CELL + CELL/2 };
+      const polyPts = path.map(p => `${PAD+p.c*CELL+CELL/2},${PAD+p.r*CELL+CELL/2}`).join(" ");
+      const lastCell = path.length > 0 ? path[path.length-1] : null;
+      const lastPt = lastCell ? { x: PAD+lastCell.c*CELL+CELL/2, y: PAD+lastCell.r*CELL+CELL/2 } : null;
+
+      const dotR = Math.max(1.5, CELL / 18);
+      const nodeR = Math.max(7, CELL / 5);
+      const pathW = Math.max(1.5, CELL / 16);
+      const glowW = Math.max(4, CELL / 7);
+      const wallW = CELL >= 50 ? 2 : CELL >= 30 ? 1.5 : 1;
+      const accent = DIFF_COLORS[difficulty];
+
+      const btnStyle = (active, color) => ({
+        padding: "8px 18px",
+        background: active ? `${color}22` : "transparent",
+        color: active ? color : `${color}88`,
+        border: `1px solid ${active ? color : color + "44"}`,
+        borderRadius: 6, cursor: "pointer",
+        fontSize: 10, letterSpacing: 3, textTransform: "uppercase",
+        fontFamily: "'Courier New', monospace",
+        transition: "all 0.2s",
+      });
+
+      return (
+        <div style={{ display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+          minHeight:"100vh",background:"#080c14",fontFamily:"'Courier New',monospace",
+          userSelect:"none",padding:16,gap:0 }}>
+
+          {/* Title */}
+          <div style={{ marginBottom:16,textAlign:"center" }}>
+            <div style={{ fontSize:10,letterSpacing:6,color:"#3a5a7a",textTransform:"uppercase",marginBottom:3 }}>trace the path</div>
+            <div style={{ fontSize:24,fontWeight:"bold",color:"#e0f0ff",letterSpacing:2 }}>MAZE</div>
+          </div>
+
+          {/* Difficulty selector */}
+          <div style={{ display:"flex",gap:8,marginBottom:16 }}>
+            {Object.entries(LEVELS).map(([key, { label }]) => (
+              <button key={key} style={btnStyle(difficulty===key, DIFF_COLORS[key])}
+                onClick={() => changeDifficulty(key)}>{label}</button>
+            ))}
+          </div>
+
+          {/* Win banner */}
+          {won && (
+            <div style={{ marginBottom:12,padding:"7px 24px",background:"rgba(0,255,180,0.1)",
+              border:"1px solid rgba(0,255,180,0.4)",borderRadius:40,color:"#00ffb4",
+              fontSize:12,letterSpacing:3,animation:"popIn 0.3s ease" }}>✦ ESCAPED ✦</div>
+          )}
+
+          {/* Maze SVG */}
+          <div style={{ maxWidth:"100vw",overflowX:"auto",borderRadius:10,background:"#0d1520",overflow:"hidden",transition:"border-color 0.2s,box-shadow 0.2s",
+            border:`1px solid ${stuck?"rgba(255,80,80,0.5)":"#1a2d45"}`,
+            boxShadow:stuck?"0 0 30px rgba(255,60,60,0.2),0 16px 48px rgba(0,0,0,0.7)":"0 0 32px rgba(0,120,255,0.07),0 16px 48px rgba(0,0,0,0.7)" }}>
+            <svg ref={svgRef} width={svgW} height={svgH}
+              style={{ display:"block",touchAction:"none",cursor:"crosshair" }}
+              onMouseDown={e=>handleStart(e.clientX,e.clientY)}
+              onTouchStart={e=>{e.preventDefault();handleStart(e.touches[0].clientX,e.touches[0].clientY);}}
+              onTouchMove={e=>{e.preventDefault();handleMove(e.touches[0].clientX,e.touches[0].clientY);}}
+              onTouchEnd={handleEnd}>
+              <defs>
+                <filter id="glow"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <filter id="glowS"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <filter id="glowR"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+                <linearGradient id="pg" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor={won?"#00ffb4":accent}/>
+                  <stop offset="100%" stopColor={won?"#00ff80":"#7b61ff"}/>
+                </linearGradient>
+              </defs>
+
+              {/* Cell highlights */}
+              {Array.from({length:ROWS},(_,r)=>Array.from({length:COLS},(_,c)=>(
+                <rect key={`bg${r}${c}`} x={PAD+c*CELL+1} y={PAD+r*CELL+1} width={CELL-2} height={CELL-2}
+                  fill={path.some(p=>p.r===r&&p.c===c)?"rgba(0,180,255,0.05)":"transparent"}/>
+              )))}
+
+              {/* Path */}
+              {path.length>1&&<>
+                <polyline points={polyPts} fill="none" stroke={won?"#00ffb4":stuck?"#ff4040":accent}
+                  strokeWidth={glowW} strokeLinecap="round" strokeLinejoin="round" opacity={0.12}/>
+                <polyline points={polyPts} fill="none" stroke={won?"#00ffb4":stuck?"#ff6060":"url(#pg)"}
+                  strokeWidth={pathW} strokeLinecap="round" strokeLinejoin="round" filter="url(#glow)"/>
+              </>}
+
+              {/* Path dots */}
+              {path.map((p,i)=>{ if(i===0)return null;
+                const x=PAD+p.c*CELL+CELL/2, y=PAD+p.r*CELL+CELL/2;
+                return <circle key={`d${i}`} cx={x} cy={y} r={dotR} fill={won?"#00ffb4":accent+"bb"}/>;
+              })}
+
+              {/* Stuck ring */}
+              {stuck&&lastPt&&<circle cx={lastPt.x} cy={lastPt.y} r={nodeR*0.9}
+                fill="none" stroke="#ff4040" strokeWidth={1.5} filter="url(#glowR)"
+                style={{animation:"stuckPulse 0.3s ease infinite"}}/>}
+
+              {/* Walls */}
+              {walls.map(({key,x1,y1,x2,y2})=>(
+                <line key={key} x1={x1} y1={y1} x2={x2} y2={y2}
+                  stroke="#1e3550" strokeWidth={wallW} strokeLinecap="square"/>
+              ))}
+
+              {/* Border */}
+              <rect x={PAD} y={PAD} width={COLS*CELL} height={ROWS*CELL} fill="none" stroke="#2a4a6a" strokeWidth={2}/>
+
+              {/* Current position */}
+              {lastPt&&path.length>1&&!won&&<circle cx={lastPt.x} cy={lastPt.y} r={nodeR*0.6}
+                fill={stuck?"rgba(255,60,60,0.25)":accent+"33"}
+                stroke={stuck?"#ff6060":accent} strokeWidth={1.2} filter="url(#glow)"/>}
+
+              {/* S node */}
+              <circle cx={startPt.x} cy={startPt.y} r={nodeR} fill="rgba(0,255,100,0.1)" stroke="#00ff80" strokeWidth={1.5}/>
+              <text x={startPt.x} y={startPt.y+4} textAnchor="middle" fontSize={Math.max(9,CELL/6)} fill="#00ff80">S</text>
+
+              {/* E node */}
+              <circle cx={endPt.x} cy={endPt.y} r={nodeR}
+                fill={won?"rgba(0,255,180,0.2)":"rgba(255,200,0,0.08)"}
+                stroke={won?"#00ffb4":"#ffcc00"} strokeWidth={1.5} filter={won?"url(#glowS)":undefined}/>
+              <text x={endPt.x} y={endPt.y+4} textAnchor="middle" fontSize={Math.max(9,CELL/6)} fill={won?"#00ffb4":"#ffcc00"}>E</text>
+            </svg>
+          </div>
+
+          {/* Status */}
+          <div style={{ marginTop:12,fontSize:10,color:stuck?"#ff6060":"#2a4a6a",
+            letterSpacing:2,textAlign:"center",transition:"color 0.2s",minHeight:18 }}>
+            {stuck?"DEAD END — BACKTRACK":
+             path.length===0?"DRAG FROM  S  TO REACH  E":
+             won?"PATH FOUND — WELL DONE":
+             `CELLS TRACED: ${path.length}`}
+          </div>
+
+          {/* Controls */}
+          <div style={{ marginTop:16,display:"flex",gap:10 }}>
+            <button style={btnStyle(false,"#3a7aaa")} onClick={reset}>New Maze</button>
+            <button style={btnStyle(false,"#3a7a3a")} onClick={clearPath}>Reset Path</button>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
